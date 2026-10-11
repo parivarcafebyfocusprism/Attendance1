@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Staff Attendance – Focus Prism</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#16262b; --muted:#5b6d72; --paper:#eaf0ee; --panel:#ffffff; --line:#cdd8d5;
+  --brand:#0d5c63; --brand-ink:#ffffff; --mark:#e9a820; --danger:#b3261e;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--brand);color:var(--brand-ink);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;flex:1 1 auto;font-weight:700}
+header small{display:block;font-weight:400;opacity:.8;font-size:12px}
+nav{display:flex;overflow-x:auto;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+nav button{flex:0 0 auto;border:0;background:none;padding:12px 16px;font:inherit;color:var(--muted);border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+nav button.on{color:var(--ink);font-weight:700;border-bottom-color:var(--mark)}
+main{max-width:1100px;margin:0 auto;padding:12px}
+.tab{display:none}.tab.on{display:block}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:12px}
+h2{font-size:16px;margin:0 0 10px}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}
+input,select,button{font:inherit}
+input[type=text],input[type=date],input[type=number],select{width:100%;padding:9px 8px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink);min-height:40px}
+input[type=color]{width:56px;height:40px;padding:2px;border:1px solid var(--line);border-radius:5px;background:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px}
+.bar>div{flex:1 1 150px}
+.btn{border:1px solid var(--brand);background:var(--brand);color:#fff;padding:9px 14px;border-radius:5px;cursor:pointer;min-height:40px}
+.btn.alt{background:#fff;color:var(--brand)}
+.btn.warn{background:#fff;color:var(--danger);border-color:var(--danger)}
+.btn.sm{padding:5px 10px;min-height:32px;font-size:13px}
+.btn.xl{background:var(--mark);border-color:var(--mark);color:#201500;font-weight:700}
+.note{color:var(--muted);font-size:13px}
+.dept{background:#dff0f2;font-weight:700;padding:6px 10px;border-radius:4px;margin:12px 0 4px}
+.row{display:grid;grid-template-columns:1fr 92px 138px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.row .who b{display:block}
+.row .who small{color:var(--muted)}
+.row select{min-height:38px;padding:6px 4px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:center;white-space:nowrap}
+th{background:#dff0f2;position:sticky;top:0}
+td.l,th.l{text-align:left}
+.sw{display:inline-block;width:18px;height:18px;border-radius:3px;border:1px solid #0003;vertical-align:middle}
+#status{font-size:12px;opacity:.9}
+.staffrow{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+.staffrow .who small{display:block;color:var(--muted)}
+.chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:3px 6px 3px 10px;margin:3px 4px 3px 0;font-size:13px}
+.chip button{border:0;background:none;color:var(--danger);font-size:16px;cursor:pointer;line-height:1}
+:focus-visible{outline:3px solid var(--mark);outline-offset:1px}
+@media print{
+  @page{size:landscape;margin:10mm}
+  header,nav,.bar,.btn,.noprint{display:none!important}
+  .tab{display:none!important}.tab.on{display:block!important}
+  body{background:#fff}.panel{border:0}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Staff Attendance<small>Focus Prism</small></h1>
+  <span id="status"></span>
+  <button class="btn xl" id="btnExport">Export to Excel</button>
+</header>
+<nav id="nav">
+  <button data-tab="att" class="on">Daily attendance</button>
+  <button data-tab="staff">Staff form</button>
+  <button data-tab="month">Monthly summary</button>
+  <button data-tab="dept">Department report</button>
+  <button data-tab="set">Settings &amp; backup</button>
+</nav>
+<main>
+
+<!-- DAILY ATTENDANCE -->
+
+<section class="tab on" id="tab-att">
+  <div class="panel">
+    <div class="bar">
+      <div><label for="attDate">Date</label><input type="date" id="attDate"></div>
+      <div><label for="attDept">Department</label><select id="attDept"></select></div>
+      <div style="flex:0 0 auto"><button class="btn alt" id="btnAllP">Mark unmarked as Present</button></div>
+    </div>
+    <div class="note" id="attCount"></div>
+    <div id="attList"></div>
+  </div>
+</section>
+
+<!-- STAFF FORM -->
+
+<section class="tab" id="tab-staff">
+  <div class="panel">
+    <h2 id="staffTitle">Add staff</h2>
+    <div class="grid">
+      <div><label for="fId">Employee ID</label><input type="text" id="fId" autocomplete="off"></div>
+      <div><label for="fName">Employee name</label><input type="text" id="fName" autocomplete="off"></div>
+      <div><label for="fDept">Department</label><select id="fDept"></select></div>
+      <div><label for="fHours">Working hours</label><input type="text" id="fHours" placeholder="e.g. 07:00 - 16:00" autocomplete="off"></div>
+      <div><label for="fStatus">Employment status</label><select id="fStatus"><option>Active</option><option>Inactive</option></select></div>
+      <div><label for="fDoj">Date of joining</label><input type="date" id="fDoj"></div>
+    </div>
+    <div class="bar" style="margin-top:12px">
+      <div style="flex:0 0 auto"><button class="btn" id="btnSaveStaff">Save staff</button></div>
+      <div style="flex:0 0 auto"><button class="btn alt" id="btnClearStaff">Clear form</button></div>
+    </div>
+    <div class="note">Only Active staff appear in daily attendance and reports. Set a person to Inactive instead of deleting to keep their past records.</div>
+  </div>
+  <div class="panel">
+    <h2>Staff list</h2>
+    <div class="bar">
+      <div><label for="sDept">Department</label><select id="sDept"></select></div>
+      <div><label for="sSearch">Search</label><input type="text" id="sSearch" placeholder="Name or ID"></div>
+    </div>
+    <div id="staffList"></div>
+  </div>
+</section>
+
+<!-- MONTHLY SUMMARY -->
+
+<section class="tab" id="tab-month">
+  <div class="panel">
+    <div class="bar">
+      <div><label for="mMonth">Month</label><select id="mMonth"></select></div>
+      <div><label for="mYear">Year</label><input type="number" id="mYear" min="2000" max="2100"></div>
+      <div style="flex:0 0 auto"><button class="btn alt" onclick="window.print()">Print</button></div>
+    </div>
+    <div class="note" id="mInfo"></div>
+    <div class="tbl" id="mTable"></div>
+  </div>
+</section>
+
+<!-- DEPARTMENT REPORT -->
+
+<section class="tab" id="tab-dept">
+  <div class="panel">
+    <div class="bar">
+      <div><label for="dDate">Date</label><input type="date" id="dDate"></div>
+      <div style="flex:0 0 auto"><button class="btn alt" onclick="window.print()">Print</button></div>
+    </div>
+    <div class="tbl" id="dTable"></div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+
+<section class="tab" id="tab-set">
+  <div class="panel">
+    <h2>Backup and restore</h2>
+    <div class="bar">
+      <div style="flex:0 0 auto"><button class="btn" id="btnBackup">Download backup</button></div>
+      <div style="flex:0 0 auto"><button class="btn alt" id="btnRestore">Restore from backup</button></div>
+      <input type="file" id="fileRestore" accept=".json,application/json" hidden>
+    </div>
+    <div class="note">Data is saved in this browser only. Download a backup regularly and before clearing browser data.</div>
+  </div>
+  <div class="panel">
+    <h2>Leave policy</h2>
+    <label for="setLeave">Approved leave (L) is</label>
+    <select id="setLeave">
+      <option value="excluded">Excluded from scheduled working days</option>
+      <option value="present">Counted as a present day</option>
+      <option value="absent">Counted as scheduled but not present</option>
+    </select>
+  </div>
+  <div class="panel">
+    <h2>Attendance codes</h2>
+    <div class="tbl"><table id="codeTbl"></table></div>
+    <div class="grid" style="margin-top:10px">
+      <div><label for="cCode">Code (up to 4 letters)</label><input type="text" id="cCode" maxlength="4"></div>
+      <div><label for="cLabel">Meaning</label><input type="text" id="cLabel"></div>
+      <div><label for="cType">Counts as</label>
+        <select id="cType">
+          <option value="present">Present day</option>
+          <option value="half">Half day</option>
+          <option value="absent">Absent</option>
+          <option value="leave">Leave</option>
+          <option value="off">Off (not scheduled)</option>
+        </select></div>
+      <div><label for="cColor">Colour</label><input type="color" id="cColor" value="#ddd6fe"></div>
+    </div>
+    <div class="bar" style="margin-top:10px"><div style="flex:0 0 auto"><button class="btn" id="btnAddCode">Add code</button></div></div>
+  </div>
+  <div class="panel">
+    <h2>Departments</h2>
+    <div id="deptChips"></div>
+    <div class="bar" style="margin-top:8px">
+      <div><label for="newDept">New department</label><input type="text" id="newDept"></div>
+      <div style="flex:0 0 auto"><button class="btn" id="btnAddDept">Add department</button></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Shifts</h2>
+    <div id="shiftChips"></div>
+    <div class="bar" style="margin-top:8px">
+      <div><label for="newShift">New shift</label><input type="text" id="newShift"></div>
+      <div style="flex:0 0 auto"><button class="btn" id="btnAddShift">Add shift</button></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Clear data</h2>
+    <button class="btn warn" id="btnClear">Delete all saved data</button>
+  </div>
+</section>
+</main>
+
+<script>
+const KEY = 'StaffAttendanceFP';
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+
+function defaults() {
+  return {
+    staff: [],
+    att: {},
+    depts: ['Pantry','Tandoor','South Indian','Metro Adda','Chinese','Indian North','Mor','Rasa','Metro Chai'],
+    codes: [
+      {code:'P',  label:'Present',    color:'#bbf7d0', type:'present', core:true},
+      {code:'A',  label:'Absent',     color:'#fecaca', type:'absent',  core:true},
+      {code:'WO', label:'Weekly Off', color:'#bae6fd', type:'off',     core:true},
+      {code:'L',  label:'Leave',      color:'#fed7aa', type:'leave',   core:true},
+      {code:'HD', label:'Half Day',   color:'#fef08a', type:'half',    core:true},
+      {code:'H',  label:'Holiday',    color:'#d1d5db', type:'off',     core:true}
+    ],
+    shifts: ['Mor','Br','2nd','Night','G','Off'],
+    settings: {leave:'excluded'}
+  };
+}
+let db = load();
+function load() {
+  const d = defaults();
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && typeof s === 'object') {
+      return Object.assign(d, s, {settings: Object.assign(d.settings, s.settings || {})});
+    }
+  } catch (e) {}
+  return d;
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(db));
+    const t = new Date();
+    $('status').textContent = 'Saved ' + pad(t.getHours()) + ':' + pad(t.getMinutes());
+  } catch (e) {
+    $('status').textContent = 'Could not save';
+    alert('Saving failed. Browser storage may be full or blocked.');
+  }
+}
+const cobj = k => db.codes.find(c => c.code === k);
+const dim = (y, m) => new Date(y, m + 1, 0).getDate();
+const dstr = (y, m, d) => y + '-' + pad(m + 1) + '-' + pad(d);
+const today = () => { const t = new Date(); return dstr(t.getFullYear(), t.getMonth(), t.getDate()); };
+function orderedStaff(activeOnly = true) {
+  const out = [];
+  db.depts.forEach(d => db.staff.forEach(s => {
+    if (s.dept === d && (!activeOnly || s.status === 'Active')) out.push(s);
+  }));
+  db.staff.forEach(s => {
+    if (!db.depts.includes(s.dept) && (!activeOnly || s.status === 'Active')) out.push(s);
+  });
+  return out;
+}
+function recOf(date, id) { return (db.att[date] && db.att[date][id]) || null; }
+// returns [presentEquivalent, scheduled]
+function val(codeKey, date) {
+  if (!codeKey) return date > today() ? [0, 0] : [0, 1];
+  const c = cobj(codeKey) || {type:'off'};
+  switch (c.type) {
+    case 'present': return [1, 1];
+    case 'half': return [0.5, 1];
+    case 'absent': return [0, 1];
+    case 'leave': { const p = db.settings.leave; return p === 'present' ? [1, 1] : p === 'absent' ? [0, 1] : [0, 0]; }
+    default: return [0, 0];
+  }
+}
+
+/* ---------- Tabs ---------- */
+$('nav').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
+  renderAll();
+});
+
+/* ---------- Dropdown fills ---------- */
+function fillDeptSelect(el, withAll) {
+  const cur = el.value;
+  el.innerHTML = (withAll ? '<option value="">All departments</option>' : '') +
+    db.depts.map(d => '<option>' + esc(d) + '</option>').join('');
+  if ([...el.options].some(o => o.value === cur)) el.value = cur;
+}
+
+/* ---------- Daily attendance ---------- */
+function renderAtt() {
+  fillDeptSelect($('attDept'), true);
+  const date = $('attDate').value;
+  const dept = $('attDept').value;
+  const list = orderedStaff().filter(s => !dept || s.dept === dept);
+  if (!db.staff.length) {
+    $('attList').innerHTML = '<p class="note">No staff yet. Add people in the Staff form tab.</p>';
+    $('attCount').textContent = '';
+    return;
+  }
+  if (!date) { $('attList').innerHTML = '<p class="note">Choose a date.</p>'; return; }
+  let html = '', last = null, marked = 0;
+  list.forEach(s => {
+    if (s.dept !== last) { html += '<div class="dept">' + esc(s.dept) + '</div>'; last = s.dept; }
+    const r = recOf(date, s.id) || {};
+    if (r.c) marked++;
+    const c = r.c ? cobj(r.c) : null;
+    html += '<div class="row"><div class="who"><b>' + esc(s.name) + '</b><small>' + esc(s.id) + (s.hours ? ' · ' + esc(s.hours) : '') + '</small></div>' +
+      '<select data-k="s" data-id="' + esc(s.id) + '" aria-label="Shift for ' + esc(s.name) + '"><option value="">Shift</option>' +
+      db.shifts.map(x => '<option' + (r.s === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>' +
+      '<select data-k="c" data-id="' + esc(s.id) + '" aria-label="Attendance for ' + esc(s.name) + '" style="background:' + (c ? c.color : '#fff') + '"><option value="">Not marked</option>' +
+      db.codes.map(x => '<option value="' + esc(x.code) + '"' + (r.c === x.code ? ' selected' : '') + '>' + esc(x.code) + ' – ' + esc(x.label) + '</option>').join('') + '</select></div>';
+  });
+  $('attList').innerHTML = html || '<p class="note">No active staff in this department.</p>';
+  $('attCount').textContent = marked + ' of ' + list.length + ' marked for ' + date;
+}
+$('attList').addEventListener('change', e => {
+  const sel = e.target; if (!sel.dataset.k) return;
+  const date = $('attDate').value; const id = sel.dataset.id;
+  db.att[date] = db.att[date] || {};
+  const r = db.att[date][id] = db.att[date][id] || {};
+  if (sel.dataset.k === 'c') {
+    if (sel.value) r.c = sel.value; else delete r.c;
+    const c = cobj(sel.value); sel.style.background = c ? c.color : '#fff';
+  } else {
+    if (sel.value) r.s = sel.value; else delete r.s;
+  }
+  if (!r.c && !r.s) delete db.att[date][id];
+  if (!Object.keys(db.att[date]).length) delete db.att[date];
+  save(); renderAtt();
+});
+$('attDate').addEventListener('change', renderAtt);
+$('attDept').addEventListener('change', renderAtt);
+$('btnAllP').addEventListener('click', () => {
+  const date = $('attDate').value; if (!date) return alert('Choose a date first.');
+  const dept = $('attDept').value;
+  orderedStaff().filter(s => !dept || s.dept === dept).forEach(s => {
+    db.att[date] = db.att[date] || {};
+    const r = db.att[date][s.id] = db.att[date][s.id] || {};
+    if (!r.c) r.c = 'P';
+  });
+  save(); renderAtt();
+});
+
+/* ---------- Staff form ---------- */
+let editingId = null;
+function clearStaffForm() {
+  editingId = null;
+  ['fId','fName','fHours','fDoj'].forEach(i => $(i).value = '');
+  $('fId').disabled = false; $('fStatus').value = 'Active';
+  $('staffTitle').textContent = 'Add staff';
+}
+$('btnClearStaff').addEventListener('click', clearStaffForm);
+$('btnSaveStaff').addEventListener('click', () => {
+  const rec = {
+    id: $('fId').value.trim(), name: $('fName').value.trim(), dept: $('fDept').value,
+    hours: $('fHours').value.trim(), status: $('fStatus').value, doj: $('fDoj').value
+  };
+  if (!rec.id || !rec.name || !rec.dept) return alert('Employee ID, name and department are required.');
+  const dupId = db.staff.some(s => s.id.toLowerCase() === rec.id.toLowerCase() && s.id !== editingId);
+  if (dupId) return alert('Employee ID ' + rec.id + ' already exists.');
+  const dupName = db.staff.some(s => s.id !== editingId && s.name.toLowerCase() === rec.name.toLowerCase() && s.dept === rec.dept);
+  if (dupName) return alert(rec.name + ' is already listed in ' + rec.dept + '.');
+  if (editingId) {
+    const i = db.staff.findIndex(s => s.id === editingId);
+    rec.id = editingId; db.staff[i] = rec;
+  } else db.staff.push(rec);
+  save(); clearStaffForm(); renderStaff();
+});
+function renderStaff() {
+  fillDeptSelect($('fDept'), false);
+  fillDeptSelect($('sDept'), true);
+  const d = $('sDept').value, q = $('sSearch').value.trim().toLowerCase();
+  const list = orderedStaff(false).filter(s => (!d || s.dept === d) &&
+    (!q || s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)));
+  $('staffList').innerHTML = list.length ? list.map(s =>
+    '<div class="staffrow"><div class="who"><b>' + esc(s.name) + '</b><small>' + esc(s.id) + ' · ' + esc(s.dept) +
+    (s.hours ? ' · ' + esc(s.hours) : '') + ' · ' + esc(s.status) + '</small></div><div>' +
+    '<button class="btn alt sm" data-edit="' + esc(s.id) + '">Edit</button> ' +
+    '<button class="btn warn sm" data-del="' + esc(s.id) + '">Delete</button></div></div>').join('')
+    : '<p class="note">No staff found.</p>';
+}
+$('sDept').addEventListener('change', renderStaff);
+$('sSearch').addEventListener('input', renderStaff);
+$('staffList').addEventListener('click', e => {
+  const ed = e.target.dataset.edit, dl = e.target.dataset.del;
+  if (ed) {
+    const s = db.staff.find(x => x.id === ed); if (!s) return;
+    editingId = s.id;
+    $('fId').value = s.id; $('fId').disabled = true; $('fName').value = s.name; $('fDept').value = s.dept;
+    $('fHours').value = s.hours || ''; $('fStatus').value = s.status; $('fDoj').value = s.doj || '';
+    $('staffTitle').textContent = 'Edit staff';
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+  if (dl) {
+    const s = db.staff.find(x => x.id === dl); if (!s) return;
+    if (!confirm('Delete ' + s.name + '? Past attendance records for this ID stay in the backup but will no longer show. Setting the person to Inactive is safer.')) return;
+    db.staff = db.staff.filter(x => x.id !== dl); save(); renderStaff();
+  }
+});
+
+/* ---------- Monthly summary ---------- */
+function monthSummary(y, m) {
+  const n = dim(y, m);
+  return orderedStaff().map(s => {
+    const counts = {}; let pe = 0, sched = 0, unmarked = 0;
+    for (let d = 1; d <= n; d++) {
+      const ds = dstr(y, m, d); const r = recOf(ds, s.id); const k = r && r.c;
+      if (k) counts[k] = (counts[k] || 0) + 1;
+      else if (ds <= today()) unmarked++;
+      const v = val(k, ds); pe += v[0]; sched += v[1];
+    }
+    return {s, counts, pe, sched, unmarked, pct: sched ? pe / sched * 100 : 0, days: n};
+  });
+}
+function renderMonth() {
+  const y = +$('mYear').value, m = +$('mMonth').value;
+  if (!y) return;
+  const rows = monthSummary(y, m);
+  $('mInfo').textContent = MONTHS[m] + ' ' + y + ': ' + dim(y, m) + ' calendar days. Future dates without an entry are not counted.';
+  let h = '<table><tr><th class="l">Department</th><th class="l">Employee</th><th>Days</th>' +
+    db.codes.map(c => '<th style="background:' + c.color + '">' + esc(c.code) + '</th>').join('') +
+    '<th>Not marked</th><th>Scheduled days</th><th>Present days</th><th>Attendance %</th></tr>';
+  rows.forEach(r => {
+    h += '<tr><td class="l">' + esc(r.s.dept) + '</td><td class="l">' + esc(r.s.name) + '</td><td>' + r.days + '</td>' +
+      db.codes.map(c => '<td>' + (r.counts[c.code] || 0) + '</td>').join('') +
+      '<td>' + r.unmarked + '</td><td>' + r.sched + '</td><td>' + r.pe + '</td><td><b>' + r.pct.toFixed(1) + '%</b></td></tr>';
+  });
+  $('mTable').innerHTML = rows.length ? h + '</table>' : '<p class="note">No active staff yet.</p>';
+}
+$('mMonth').addEventListener('change', renderMonth);
+$('mYear').addEventListener('input', renderMonth);
+
+/* ---------- Department report ---------- */
+function deptReport(date) {
+  return db.depts.map(d => {
+    const list = orderedStaff().filter(s => s.dept === d);
+    let present = 0, absent = 0, leave = 0, off = 0, unmarked = 0, pe = 0, sched = 0;
+    list.forEach(s => {
+      const r = recOf(date, s.id); const k = r && r.c; const c = k ? (cobj(k) || {type:'off'}) : null;
+      if (!c) unmarked++;
+      else if (c.type === 'present' || c.type === 'half') present++;
+      else if (c.type === 'absent') absent++;
+      else if (c.type === 'leave') leave++;
+      else off++;
+      const v = val(k, date); pe += v[0]; sched += v[1];
+    });
+    return {d, total: list.length, present, absent, leave, off, unmarked, pct: sched ? pe / sched * 100 : 0};
+  }).filter(r => r.total > 0);
+}
+function renderDept() {
+  const date = $('dDate').value; if (!date) return;
+  const rows = deptReport(date);
+  if (!rows.length) { $('dTable').innerHTML = '<p class="note">No active staff yet.</p>'; return; }
+  const tot = rows.reduce((a, r) => { ['total','present','absent','leave','off','unmarked'].forEach(k => a[k] += r[k]); return a; },
+    {total:0, present:0, absent:0, leave:0, off:0, unmarked:0});
+  $('dTable').innerHTML = '<table><tr><th class="l">Department</th><th>Employees</th><th>Present</th><th>Absent</th><th>On leave</th><th>Off</th><th>Not marked</th><th>Attendance %</th></tr>' +
+    rows.map(r => '<tr><td class="l">' + esc(r.d) + '</td><td>' + r.total + '</td><td>' + r.present + '</td><td>' + r.absent +
+      '</td><td>' + r.leave + '</td><td>' + r.off + '</td><td>' + r.unmarked + '</td><td><b>' + r.pct.toFixed(1) + '%</b></td></tr>').join('') +
+    '<tr><th class="l">All departments</th><th>' + tot.total + '</th><th>' + tot.present + '</th><th>' + tot.absent + '</th><th>' + tot.leave + '</th><th>' + tot.off + '</th><th>' + tot.unmarked + '</th><th></th></tr></table>';
+}
+$('dDate').addEventListener('change', renderDept);
+
+/* ---------- Settings ---------- */
+function renderSettings() {
+  $('setLeave').value = db.settings.leave;
+  const typeName = {present:'Present day', half:'Half day', absent:'Absent', leave:'Leave', off:'Off (not scheduled)'};
+  $('codeTbl').innerHTML = '<tr><th>Colour</th><th>Code</th><th class="l">Meaning</th><th class="l">Counts as</th><th></th></tr>' +
+    db.codes.map(c => '<tr><td><span class="sw" style="background:' + c.color + '"></span></td><td><b>' + esc(c.code) + '</b></td><td class="l">' + esc(c.label) +
+      '</td><td class="l">' + typeName[c.type] + '</td><td>' + (c.core ? '' : '<button class="btn warn sm" data-dc="' + esc(c.code) + '">Remove</button>') + '</td></tr>').join('');
+  $('deptChips').innerHTML = db.depts.map(d => '<span class="chip">' + esc(d) + '<button aria-label="Remove ' + esc(d) + '" data-dd="' + esc(d) + '">×</button></span>').join('');
+  $('shiftChips').innerHTML = db.shifts.map(d => '<span class="chip">' + esc(d) + '<button aria-label="Remove ' + esc(d) + '" data-ds="' + esc(d) + '">×</button></span>').join('');
+}
+$('setLeave').addEventListener('change', () => { db.settings.leave = $('setLeave').value; save(); });
+$('btnAddCode').addEventListener('click', () => {
+  const code = $('cCode').value.trim().toUpperCase(), label = $('cLabel').value.trim();
+  if (!code || !label) return alert('Enter a code and its meaning.');
+  if (cobj(code)) return alert('The code ' + code + ' already exists.');
+  db.codes.push({code, label, color: $('cColor').value, type: $('cType').value});
+  $('cCode').value = ''; $('cLabel').value = ''; save(); renderSettings();
+});
+$('btnAddDept').addEventListener('click', () => {
+  const v = $('newDept').value.trim(); if (!v) return;
+  if (db.depts.some(d => d.toLowerCase() === v.toLowerCase())) return alert('That department already exists.');
+  db.depts.push(v); $('newDept').value = ''; save(); renderSettings();
+});
+$('btnAddShift').addEventListener('click', () => {
+  const v = $('newShift').value.trim(); if (!v) return;
+  if (db.shifts.some(d => d.toLowerCase() === v.toLowerCase())) return alert('That shift already exists.');
+  db.shifts.push(v); $('newShift').value = ''; save(); renderSettings();
+});
+$('tab-set').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.dc) {
+    if (!confirm('Remove code ' + t.dataset.dc + '? Days already marked with it will count as off.')) return;
+    db.codes = db.codes.filter(c => c.code !== t.dataset.dc); save(); renderSettings();
+  }
+  if (t.dataset.dd) {
+    if (db.staff.some(s => s.dept === t.dataset.dd)) return alert('Staff are still assigned to this department. Move them first.');
+    db.depts = db.depts.filter(d => d !== t.dataset.dd); save(); renderSettings();
+  }
+  if (t.dataset.ds) { db.shifts = db.shifts.filter(d => d !== t.dataset.ds); save(); renderSettings(); }
+});
+
+/* ---------- Backup / restore ---------- */
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+$('btnBackup').addEventListener('click', () => {
+  download(new Blob([JSON.stringify(db, null, 2)], {type: 'application/json'}), 'staff-attendance-backup-' + today() + '.json');
+});
+$('btnRestore').addEventListener('click', () => $('fileRestore').click());
+$('fileRestore').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      if (!d || !Array.isArray(d.staff) || typeof d.att !== 'object') throw new Error('bad');
+      if (!confirm('Restore this backup? It replaces all data currently saved in this browser.')) return;
+      db = Object.assign(defaults(), d, {settings: Object.assign(defaults().settings, d.settings || {})});
+      save(); renderAll(); alert('Backup restored.');
+    } catch (err) { alert('This file is not a valid attendance backup.'); }
+  };
+  rd.readAsText(f); e.target.value = '';
+});
+$('btnClear').addEventListener('click', () => {
+  if (!confirm('Delete ALL staff and attendance data from this browser?')) return;
+  if (!confirm('This cannot be undone unless you have a backup. Delete everything?')) return;
+  db = defaults(); save(); renderAll();
+});
+
+/* ---------- Excel export ---------- */
+function sheet(aoa, widths) {
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  if (widths) ws['!cols'] = widths.map(w => ({wch: w}));
+  return ws;
+}
+$('btnExport').addEventListener('click', () => {
+  if (typeof XLSX === 'undefined') return alert('The Excel library did not load. Check your internet connection and try again.');
+  const y = +$('mYear').value, m = +$('mMonth').value, n = dim(y, m);
+  const date = $('attDate').value || today();
+  const ddate = $('dDate').value || date;
+  const wb = XLSX.utils.book_new();
+  const staff = orderedStaff(false);
+
+  XLSX.utils.book_append_sheet(wb, sheet(
+    [['Department','Employee ID','Employee Name','Working Hours','Employment Status','Date of Joining']]
+      .concat(staff.map(s => [s.dept, s.id, s.name, s.hours || '', s.status, s.doj || ''])),
+    [16,12,26,18,16,14]), 'Staff Master');
+
+  const head1 = ['Department','Employee Name','Working Hours'], head2 = ['','',''];
+  for (let d = 1; d <= n; d++) { head1.push(d); head2.push(DAYS[new Date(y, m, d).getDay()]); }
+  const reg = [head1, head2].concat(orderedStaff().map(s => {
+    const row = [s.dept, s.name, s.hours || ''];
+    for (let d = 1; d <= n; d++) { const r = recOf(dstr(y, m, d), s.id); row.push(r && r.c ? r.c : ''); }
+    return row;
+  }));
+  XLSX.utils.book_append_sheet(wb, sheet(reg, [16,26,16].concat(Array(n).fill(5))), ('Register ' + MONTHS[m].slice(0, 3) + ' ' + y));
+
+  const sum = [['Department','Employee Name','Calendar Days'].concat(db.codes.map(c => c.code), ['Not Marked','Scheduled Days','Present Days','Attendance %'])]
+    .concat(monthSummary(y, m).map(r => [r.s.dept, r.s.name, r.days]
+      .concat(db.codes.map(c => r.counts[c.code] || 0), [r.unmarked, r.sched, r.pe, Math.round(r.pct * 10) / 10])));
+  XLSX.utils.book_append_sheet(wb, sheet(sum, [16,26,13]), 'Monthly Summary');
+
+  const dr = [['Department report for ' + ddate], ['Department','Employees','Present','Absent','On Leave','Off','Not Marked','Attendance %']]
+    .concat(deptReport(ddate).map(r => [r.d, r.total, r.present, r.absent, r.leave, r.off, r.unmarked, Math.round(r.pct * 10) / 10]));
+  XLSX.utils.book_append_sheet(wb, sheet(dr, [18,11,9,9,9,7,11,14]), 'Department Report');
+
+  const daily = [['Daily attendance for ' + date], ['Department','Employee ID','Employee Name','Working Hours','Shift','Attendance Code','Meaning']]
+    .concat(orderedStaff().map(s => {
+      const r = recOf(date, s.id) || {}; const c = r.c ? cobj(r.c) : null;
+      return [s.dept, s.id, s.name, s.hours || '', r.s || '', r.c || '', c ? c.label : ''];
+    }));
+  XLSX.utils.book_append_sheet(wb, sheet(daily, [16,12,26,16,10,15,14]), 'Daily Attendance');
+
+  XLSX.writeFile(wb, 'Staff-Attendance-' + y + '-' + pad(m + 1) + '.xlsx');
+});
+
+/* ---------- Init ---------- */
+function renderAll() {
+  renderAtt(); renderStaff(); renderMonth(); renderDept(); renderSettings();
+}
+(function init() {
+  $('mMonth').innerHTML = MONTHS.map((n, i) => '<option value="' + i + '">' + n + '</option>').join('');
+  const t = new Date();
+  $('mMonth').value = t.getMonth(); $('mYear').value = t.getFullYear();
+  $('attDate').value = today(); $('dDate').value = today();
+  renderAll();
+})();
+</script>
+
+</body>
+</html>
